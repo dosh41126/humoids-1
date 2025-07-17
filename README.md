@@ -1,3 +1,11 @@
+
+
+build
+```
+docker build -t humoid-chat .
+``
+
+run
 ```
 docker run --rm -it \
   --cap-add=NET_ADMIN \
