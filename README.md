@@ -3,7 +3,7 @@
 build
 ```
 docker build -t humoid-chat .
-``
+```
 
 run
 ```
