@@ -2,14 +2,14 @@ import tkinter as tk
 import customtkinter
 import threading
 import os
-import sqlite3  # Replaced aiosqlite with sqlite3
+import sqlite3 
 import weaviate
 import logging
 import numpy as np
 import base64
 import queue
 import uuid
-import requests  # Replaced httpx.AsyncClient with requests
+import requests
 import io
 import sys
 import random
@@ -17,17 +17,12 @@ import re
 import uvicorn
 import json
 from concurrent.futures import ThreadPoolExecutor
-# Removed PIL imports
-# from PIL import Image, ImageTk
 from llama_cpp import Llama
 from os import path
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from collections import Counter
-# from bark import SAMPLE_RATE, generate_audio, preload_models
-# import sounddevice as sd
-# from scipy.io.wavfile import write as write_wav
 from summa import summarizer
 import nltk
 from textblob import TextBlob
@@ -35,11 +30,8 @@ from weaviate.util import generate_uuid5
 from nltk import pos_tag, word_tokenize
 from nltk.corpus import wordnet as wn
 from datetime import datetime
-# from elevenlabs import generate, play
-# from elevenlabs import set_api_key
 from weaviate.embedded import EmbeddedOptions
-
-import weaviate  # Ensure this is not duplicated
+import weaviate
 import logging
 import pennylane as qml
 import psutil
@@ -47,14 +39,14 @@ import webcolors
 from nltk.tokenize import word_tokenize
 
 
-customtkinter.set_appearance_mode("Dark")  # Force dark mode
+customtkinter.set_appearance_mode("Dark")
 
 nltk.data.path.append("/root/nltk_data")
 
-# Function to download NLTK data if not already downloaded
+
 def download_nltk_data():
     try:
-        # Define resources to download if not found
+
         resources = {
             'tokenizers/punkt': 'punkt',
             'taggers/averaged_perceptron_tagger': 'averaged_perceptron_tagger'
@@ -72,7 +64,6 @@ def download_nltk_data():
         print(f"Error downloading NLTK data: {e}")
 
 
-# Check if NLTK data needs to be downloaded and download if necessary
 download_nltk_data()
         
 client = weaviate.Client(
@@ -167,7 +158,6 @@ def generate_quantum_state(rgb=None):
 
     try:
         cpu = psutil.cpu_percent(interval=0.3) / 100.0
-        # normalize channels to [0,1]
         r, g, b = [c / 255 for c in rgb]
         z0, z1, z2 = rgb_quantum_gate(r, g, b, cpu)
         return (
@@ -243,7 +233,7 @@ def save_user_message(user_id, user_input):
             "response": user_input,
             "response_time": response_time
         }
-        generated_uuid = generate_uuid5(user_id, user_input)  # Adjusted to pass identifier parts
+        generated_uuid = generate_uuid5(user_id, user_input)
 
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
@@ -278,7 +268,7 @@ def save_bot_response(bot_id, bot_response):
             "response": bot_response,
             "response_time": response_time
         }
-        generated_uuid = generate_uuid5(bot_id, bot_response)  # Adjusted to pass identifier parts
+        generated_uuid = generate_uuid5(bot_id, bot_response)
 
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
@@ -694,56 +684,12 @@ class App(customtkinter.CTk):
     def process_generated_response(self, response_text):
         try:
             self.response_queue.put({'type': 'text', 'data': response_text})
-#            self.play_response_audio(response_text)
         except Exception as e:
             logger.error(f"Error in process_generated_response: {e}")
 
-#    def play_response_audio(self, response_text):
-#        try:
-#            audio = generate(
-#                text=response_text,
-#                model="eleven_multilingual_v2"  
-#            )
-#
-#            play(audio)
-#
-#        except Exception as e:
-#            logger.error(f"Error in play_response_audio: {e}")
-#    def play_response_audio(self, response_text):
-#       try:
-#            sentences = re.split('(?<=[.!?]) +', response_text)
-#            silence = np.zeros(int(0.05 * SAMPLE_RATE))
-#        
-#            def generate_sentence_audio(sentence):
-#                try:
-#                    return generate_audio(sentence, history_prompt="v2/en_speaker_6")
-#               except Exception as e:
-#                    logger.error(f"Error generating audio for sentence '{sentence}': {e}")
-#                    return np.zeros(0)
-#
-#            with ThreadPoolExecutor(max_workers=min(1, len(sentences))) as executor:
-#                audio_arrays = list(executor.map(generate_sentence_audio, sentences))
-#
-#
-#            audio_arrays = [audio for audio in audio_arrays if audio.size > 0]
-#
-#            if audio_arrays:
-#                pieces = [piece for audio in audio_arrays for piece in (audio, silence.copy())]
-#                audio = np.concatenate(pieces[:-1])
-#
-#                file_name = str(uuid.uuid4()) + ".wav"
-#                write_wav(file_name, SAMPLE_RATE, audio)
-#                sd.play(audio, samplerate=SAMPLE_RATE)
-#            else:
-#                logger.error("No audio generated due to errors in all sentences.")
-#
-#            if torch.cuda.is_available():
-#                torch.cuda.empty_cache()
-#        except Exception as e:
-#            logger.error(f"Error in play_response_audio: {e}")
 
     def run_async_in_thread(self, coro_func, user_input, result_queue):
-        # Since we're removing asyncio, we'll call the function directly in a separate thread
+
         try:
             coro_func(user_input, result_queue)
         except Exception as e:
@@ -856,7 +802,7 @@ class App(customtkinter.CTk):
             for img_data in image_data:
                 img_tk = self.convert_base64_to_tk(img_data)
                 self.response_queue.put({'type': 'image', 'data': img_tk})
-                self.save_generated_image(img_data)  # Changed to save base64 data
+                self.save_generated_image(img_data)
         except ValueError as e:
             logger.error(f"Error processing image data: {e}")
 
@@ -864,7 +810,6 @@ class App(customtkinter.CTk):
         if ',' in base64_data:
             base64_data = base64_data.split(",", 1)[1]
         image_data = base64.b64decode(base64_data)
-        # Use tkinter.PhotoImage directly with base64 data
         try:
             photo = tk.PhotoImage(data=base64_data)
             return photo
@@ -915,16 +860,13 @@ class App(customtkinter.CTk):
         self.sidebar_frame = customtkinter.CTkFrame(self, width=350, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
         
-
-        # Replace PIL Image.open and ImageTk.PhotoImage with tkinter.PhotoImage
         try:
-            logo_photo = tk.PhotoImage(file=logo_path)  # Ensure logo_path points to a supported format like PNG
+            logo_photo = tk.PhotoImage(file=logo_path) 
             self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, image=logo_photo)
-            self.logo_label.image = logo_photo  # Keep a reference to avoid garbage collection
+            self.logo_label.image = logo_photo
             self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         except Exception as e:
             logger.error(f"Error loading logo image: {e}")
-            # Optionally, use a placeholder if the logo fails to load
             self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="Logo")
             self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
 
@@ -932,9 +874,8 @@ class App(customtkinter.CTk):
         self.image_label = customtkinter.CTkLabel(self.sidebar_frame)
         self.image_label.grid(row=1, column=0, padx=20, pady=10)
         try:
-            # Create a placeholder image using tkinter.PhotoImage
             placeholder_photo = tk.PhotoImage(width=140, height=140)
-            # Fill the placeholder with a solid color
+
             placeholder_photo.put(("gray",), to=(0, 0, 140, 140))
             self.image_label.configure(image=placeholder_photo)
             self.image_label.image = placeholder_photo
