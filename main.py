@@ -149,10 +149,6 @@ def get_api_key(api_key_header: str = Security(api_key_header)):
         raise HTTPException(status_code=403, detail="Invalid API Key")
 
 def generate_quantum_state(rgb=None):
-    """
-    Take an (R,G,B) tuple 0–255 and current CPU load to produce
-    a “quantum_state” string embedding Pauli‐Z expectations.
-    """
     if rgb is None:
         rgb = (128, 128, 128)
 
@@ -174,17 +170,46 @@ def get_current_multiversal_time():
     return f"X:{x}, Y:{y}, Z:{z}, T:{t}, Time:{current_time}"
 
 def extract_rgb_from_text(text):
-    """
-    Scan the text for any English color name (e.g. 'red', 'navy', 'olive').
-    Returns the first match as an (R, G, B) tuple 0–255. Defaults to mid‐gray.
-    """
-    for token in word_tokenize(text.lower()):
-        try:
-            c = webcolors.name_to_rgb(token)
-            return (c.red, c.green, c.blue)
-        except ValueError:
-            continue
-    return (128, 128, 128)
+
+    if not text or not isinstance(text, str):
+        return (128, 128, 128) 
+
+    blob = TextBlob(text)
+    polarity = blob.sentiment.polarity 
+    subjectivity = blob.sentiment.subjectivity 
+
+    tokens = word_tokenize(text)
+    pos_tags = pos_tag(tokens)
+
+    word_count = len(tokens)
+    sentence_count = len(blob.sentences) or 1
+    avg_sentence_length = word_count / sentence_count
+
+    adj_count = sum(1 for _, tag in pos_tags if tag.startswith('JJ'))
+    adv_count = sum(1 for _, tag in pos_tags if tag.startswith('RB'))
+    verb_count = sum(1 for _, tag in pos_tags if tag.startswith('VB'))
+    noun_count = sum(1 for _, tag in pos_tags if tag.startswith('NN'))
+
+    punctuation_density = sum(1 for ch in text if ch in ',;:!?') / max(1, word_count)
+
+    valence = polarity 
+
+    arousal = (verb_count + adv_count) / max(1, word_count)
+
+    dominance = (adj_count + 1) / (noun_count + 1) 
+
+
+    hue_raw = ((1 - valence) * 120 + dominance * 20) % 360
+    hue = hue_raw / 360.0
+
+    saturation = min(1.0, max(0.2, 0.25 + 0.4 * arousal + 0.2 * subjectivity + 0.15 * (dominance - 1)))
+
+    brightness = max(0.2, min(1.0,
+        0.9 - 0.03 * avg_sentence_length + 0.2 * punctuation_density
+    ))
+
+    r, g, b = colorsys.hsv_to_rgb(hue, saturation, brightness)
+    return (int(r * 255), int(g * 255), int(b * 255))
   
 def init_db():
     try:
