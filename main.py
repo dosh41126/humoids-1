@@ -3,7 +3,6 @@ import customtkinter
 import threading
 import os
 import sqlite3 
-import weaviate
 import logging
 import numpy as np
 import base64
@@ -32,7 +31,6 @@ from nltk.corpus import wordnet as wn
 from datetime import datetime
 from weaviate.embedded import EmbeddedOptions
 import weaviate
-import logging
 import pennylane as qml
 import psutil
 import webcolors
