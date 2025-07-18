@@ -145,7 +145,6 @@ def sanitize_text(
     )
     return cleaned
 
-# Lightweight prompt‑injection pattern filter (extend as needed).
 _PROMPT_INJECTION_PAT = re.compile(
     r'(?is)(?:^|\n)\s*(system:|assistant:|ignore\s+previous|do\s+anything|jailbreak\b).*'
 )
@@ -451,23 +450,7 @@ def build_record_aad(user_id: str, *, source: str, table: str = "", cls: str = "
 
 def compute_text_embedding(text: str) -> list[float]:
 
-    if not text.strip():
-        return [0.0] * 384 
-
-    try:
-        response = requests.post(
-            "http://127.0.0.1:8079/v1/embeddings",
-            json={"text": text},
-            timeout=5
-        )
-        response.raise_for_status()
-        embedding = response.json().get("embedding")
-        if embedding is None:
-            raise ValueError("No embedding returned.")
-        return embedding
-    except Exception as e:
-        logger.error(f"Embedding generation failed: {e}")
-        return [0.0] * 384  
+    return [0.0] * 384
 
 def generate_uuid_for_weaviate(identifier, namespace=''):
     if not identifier:
@@ -882,8 +865,6 @@ def tokenize_and_generate(chunk, token, max_tokens, chunk_size):
        logger.error(f"Error in tokenize_and_generate: {e}")
        return None
 
-
-
 def extract_verbs_and_nouns(text):
     try:
         if not isinstance(text, str):
@@ -897,6 +878,7 @@ def extract_verbs_and_nouns(text):
     except Exception as e:
         print(f"Error in extract_verbs_and_nouns: {e}")
         return []
+
 def try_decrypt(value):
     try:
         return crypto.decrypt(value)
@@ -923,7 +905,6 @@ class App(customtkinter.CTk):
         except Exception as e:
             logger.warning(f"[decrypt] Could not decrypt value (returning raw): {e}")
             return value
-
 
     def __init__(self, user_identifier):
         super().__init__()
