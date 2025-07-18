@@ -1,10 +1,9 @@
-# Use an appropriate Python base image
 FROM python:3.11-slim-bookworm
 
-# Set environment variables
+# Set environment variable to avoid prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install necessary system packages
+# Install system packages
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
@@ -13,76 +12,78 @@ RUN apt-get update && apt-get install -y \
     curl \
     iptables \
     dnsutils \
+    openssl \
  && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory inside the container
+# Set the working directory
 WORKDIR /app
 
-# Install NLTK version 3.8.1 (or any desired version)
+# Install NLTK
 RUN pip install --no-cache-dir nltk==3.8.1
 
-# Copy requirements.txt to the working directory
+# Copy requirements and install dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire current directory contents into the container at /app
+# Copy app files
 COPY . .
 
-# Create a script to restrict outbound traffic
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-echo "[INFO] Setting up iptables firewall..."\n\
-\n\
-# Flush existing rules\n\
-iptables -F OUTPUT\n\
-\n\
-# Allow localhost and DNS\n\
-iptables -A OUTPUT -o lo -j ACCEPT\n\
-iptables -A OUTPUT -p udp --dport 53 -j ACCEPT\n\
-iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT\n\
-\n\
-# Allow resolved IPs for Hugging Face and GitHub (objects.githubusercontent.com)\n\
-resolve_and_allow() {\n\
-  DOMAIN=$1\n\
-  echo "[INFO] Resolving $DOMAIN..."\n\
-  getent ahosts $DOMAIN | awk \"/STREAM/ {print \\$1}\" | sort -u | while read ip; do\n\
-    echo "[INFO] Allowing $ip for $DOMAIN"\n\
-    iptables -A OUTPUT -d \"$ip\" -j ACCEPT\n\
-  done\n\
-}\n\
-\n\
-resolve_and_allow huggingface.co\n\
-resolve_and_allow objects.githubusercontent.com\n\
-\n\
-# Drop all other outbound traffic\n\
-iptables -A OUTPUT -j REJECT\n\
-\n\
-echo "[INFO] Firewall active. Continuing..."\n\
-\n\
-# Download model if not present\n\
-if [ ! -f /data/llama-2-7b-chat.ggmlv3.q8_0.bin ]; then\n\
-  echo "Downloading model file..."\n\
-  curl -L -o /data/llama-2-7b-chat.ggmlv3.q8_0.bin \\\n\
-    https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGML/resolve/main/llama-2-7b-chat.ggmlv3.q8_0.bin --progress-bar\n\
-  echo "Verifying model file..."\n\
-  echo "3bfdde943555c78294626a6ccd40184162d066d39774bd2c98dae24943d32cc3  /data/llama-2-7b-chat.ggmlv3.q8_0.bin" | sha256sum -c -\n\
-else\n\
-  echo "Model file already exists, skipping download."\n\
-fi\n\
-\n\
-ls -lh /data/llama-2-7b-chat.ggmlv3.q8_0.bin\n\
-\n\
-# Start the app\n\
-export DISPLAY=:0\n\
-exec python main.py' > /app/firewall_start.sh
+# Generate secure vault passphrase and export to env script
+RUN openssl rand -hex 32 > /app/.vault_pass && \
+    echo "export VAULT_PASSPHRASE=$(cat /app/.vault_pass)" > /app/set_env.sh && \
+    chmod +x /app/set_env.sh
 
-# Make the firewall script executable
+# Create startup script using heredoc (reliable)
+RUN cat << 'EOF' > /app/firewall_start.sh
+#!/bin/bash
+set -e
+source /app/set_env.sh
+
+echo "[INFO] Setting up iptables firewall..."
+iptables -F OUTPUT
+iptables -A OUTPUT -o lo -j ACCEPT
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+
+resolve_and_allow() {
+  DOMAIN=$1
+  echo "[INFO] Resolving $DOMAIN..."
+  getent ahosts $DOMAIN | awk '/STREAM/ {print $1}' | sort -u | while read ip; do
+    clean_ip=$(echo $ip | tr -d '"')
+    if [[ $clean_ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "[INFO] Allowing $clean_ip for $DOMAIN"
+      iptables -A OUTPUT -d $clean_ip -j ACCEPT
+    else
+      echo "[WARN] Skipping invalid IP: $clean_ip"
+    fi
+  done
+}
+
+resolve_and_allow huggingface.co
+resolve_and_allow objects.githubusercontent.com
+
+iptables -A OUTPUT -j REJECT
+echo "[INFO] Firewall active. Continuing..."
+
+if [ ! -f /data/llama-2-7b-chat.ggmlv3.q8_0.bin ]; then
+  echo "Downloading model file..."
+  curl -L -o /data/llama-2-7b-chat.ggmlv3.q8_0.bin \
+    https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGML/resolve/main/llama-2-7b-chat.ggmlv3.q8_0.bin --progress-bar
+  echo "Verifying model file..."
+  echo "3bfdde943555c78294626a6ccd40184162d066d39774bd2c98dae24943d32cc3  /data/llama-2-7b-chat.ggmlv3.q8_0.bin" | sha256sum -c -
+else
+  echo "Model file already exists, skipping download."
+fi
+
+ls -lh /data/llama-2-7b-chat.ggmlv3.q8_0.bin
+export DISPLAY=:0
+exec python main.py
+EOF
+
+# Make the script executable
 RUN chmod +x /app/firewall_start.sh
 
-# Generate random API key and write config.json
+# Generate config.json with randomized API key
 RUN python -c 'import random, string, json; print(json.dumps({ \
   "DB_NAME": "story_generator.db", \
   "WEAVIATE_ENDPOINT": "http://localhost:8079", \
@@ -96,5 +97,5 @@ RUN python -c 'import random, string, json; print(json.dumps({ \
   "ELEVEN_LABS_KEY": "apikyhere" \
 }))' > /app/config.json
 
-# Entry point
+# Entrypoint to the assistant app
 CMD ["/app/firewall_start.sh"]
